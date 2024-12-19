@@ -1,0 +1,17 @@
+- name: Add a user with sudo access
+  hosts: buildbots
+  become: true
+
+  tasks:
+    - name: Create the user and add them to the wheel group
+      user:
+        name: "{{ user }}"
+        groups: wheel
+        password: ''
+
+    - name: set their ssh key
+      authorized_key:
+        user: "{{ user }}"
+        state: present
+        key: "{{ ssh_public_key }}"
+

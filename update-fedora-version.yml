@@ -1,0 +1,15 @@
+- name: Update all stable fedora's to the next version
+  hosts: fedora-stable
+  become: true
+  tasks:
+    - name: Install dnf-plugin
+      dnf:
+        name: dnf-plugin-system-upgrade
+        state: latest
+
+    - name: Download the packages
+      command: dnf system-upgrade download --refresh --releasever="{{ version }}"
+
+    - name: Begin the update process
+      command: dnf system-upgrade reboot
+

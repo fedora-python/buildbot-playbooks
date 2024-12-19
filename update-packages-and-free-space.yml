@@ -1,0 +1,63 @@
+- name: Install packages, reboot and clean cache
+  become: true
+  hosts: buildbots
+
+  tasks:
+    - name: Update all packages
+      package:
+        name: '*'
+        state: latest
+
+    - name: check if reboot is needed
+      command: "dnf needs-restarting -r -s"
+      register: needs_restarting
+      changed_when: needs_restarting.rc == 1
+      failed_when: false
+      notify: Reboot after update
+
+    - name: Clean the dnf cache
+      command: dnf clean all
+
+  handlers:
+    - name: Reboot after update
+      reboot:
+
+- name: Clean the systemd logs
+  gather_facts: no
+  hosts: buildbots
+
+  tasks:
+    - name: clean logs older than 30 days
+      command: journalctl --vacuum-time=30d
+      changed_when: False
+
+- name: Clean disk space
+  gather_facts: no
+  hosts: buildbots
+  become: true
+
+  tasks:
+    - name: Stop the buildbot worker service
+      service:
+        name: buildbot-worker.service
+        state: stopped
+
+    - name: Find the folders to remove and register them to a var
+      find:
+        paths: "/home/buildbot/buildarea/"
+        file_type: any
+        patterns: '3.*,pull_request*,custom*,twistd.log.*'
+      register: cleanup
+
+    - name: Remove the files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ cleanup.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Start again the buildbot worker service
+      service:
+        name: buildbot-worker.service
+        state: started
