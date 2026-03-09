@@ -56,6 +56,24 @@ Example:
     ansible-playbook audit.yml
     ansible-playbook audit.yml -e "target_hosts=myhost"
 
+### healthcheck.yml
+
+Quick pass/fail health check for buildbot worker machines. Checks service
+status (worker, fail2ban, tuned, automatic updates, fstrim), security
+(SELinux, sshd), resources (disk usage, swap, zombies, coredumps),
+and buildbot configuration (keepalive, delete_leftover_dirs, master
+connectivity). Reports only problems — shows "ALL CHECKS PASSED" for
+healthy machines. The play fails if any critical checks fail.
+
+Optional variables:
+
+- `target_hosts` - host or group to target (defaults to `all`)
+
+Example:
+
+    ansible-playbook healthcheck.yml
+    ansible-playbook healthcheck.yml -e "target_hosts=myhost"
+
 ### update-packages-and-free-space.yml
 
 Updates all packages, reboots if needed, cleans systemd logs older than

@@ -1,0 +1,100 @@
+- name: Health check buildbot worker machines
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run health checks
+      shell: |
+        errors=""
+        warnings=""
+
+        # Service checks
+        systemctl is-active buildbot-worker@*.service >/dev/null 2>&1 || \
+          errors="${errors}FAIL: buildbot worker service not running\n"
+        systemctl is-active fail2ban >/dev/null 2>&1 || \
+          errors="${errors}FAIL: fail2ban not active\n"
+        systemctl is-active tuned >/dev/null 2>&1 || \
+          warnings="${warnings}WARN: tuned not active\n"
+        systemctl is-active dnf-automatic-install.timer >/dev/null 2>&1 || \
+          warnings="${warnings}WARN: dnf-automatic-install.timer not active\n"
+        systemctl is-active fstrim.timer >/dev/null 2>&1 || \
+          warnings="${warnings}WARN: fstrim.timer not active\n"
+
+        # Security checks
+        selinux_status=$(getenforce 2>/dev/null)
+        if [ "$selinux_status" != "Enforcing" ] && [ -n "$selinux_status" ]; then
+          errors="${errors}FAIL: SELinux is ${selinux_status}, expected Enforcing\n"
+        fi
+        grep -q '^PasswordAuthentication yes' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null && \
+          errors="${errors}FAIL: PasswordAuthentication is enabled\n"
+
+        # Resource checks
+        root_usage=$(df / --output=pcent | tail -1 | tr -d ' %')
+        if [ "$root_usage" -ge 90 ]; then
+          errors="${errors}FAIL: root filesystem at ${root_usage}%\n"
+        fi
+
+        home_dev=$(df --output=source /home 2>/dev/null | tail -1)
+        root_dev=$(df --output=source / | tail -1)
+        if [ "$home_dev" != "$root_dev" ]; then
+          home_usage=$(df /home --output=pcent | tail -1 | tr -d ' %')
+          if [ "$home_usage" -ge 90 ]; then
+            errors="${errors}FAIL: /home filesystem at ${home_usage}%\n"
+          fi
+        fi
+
+        total_mem=$(awk '/MemTotal/ {print int($2/1024/1024)}' /proc/meminfo)
+        total_swap=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
+        if [ "$total_mem" -lt 8 ] && [ "$total_swap" -eq 0 ]; then
+          warnings="${warnings}WARN: ${total_mem}GB RAM with no swap configured\n"
+        fi
+
+        zombie_count=$(ps -eo stat,args 2>/dev/null | grep -c '^Z.*buildbot-worker' || true)
+        if [ "$zombie_count" -gt 0 ]; then
+          errors="${errors}FAIL: ${zombie_count} zombie buildbot-worker processes\n"
+        fi
+
+        coredump_size=$(du -sm /var/lib/systemd/coredump/ 2>/dev/null | awk '{print $1}')
+        if [ "${coredump_size:-0}" -ge 1024 ]; then
+          warnings="${warnings}WARN: coredumps using ${coredump_size}MB\n"
+        fi
+
+        # Buildbot-specific checks
+        tac_file=$(find /var/lib/buildbot/worker /home/buildbot-worker -name buildbot.tac 2>/dev/null | head -1)
+        if [ -n "$tac_file" ]; then
+          grep -q '^delete_leftover_dirs = 1' "$tac_file" || \
+            warnings="${warnings}WARN: delete_leftover_dirs not set to 1\n"
+          grep -q '^keepalive = 60' "$tac_file" || \
+            warnings="${warnings}WARN: keepalive not set to 60\n"
+
+          log_dir=$(dirname "$tac_file")
+          log_size=$(du -sm "$log_dir/twistd.log" 2>/dev/null | awk '{print $1}')
+          if [ "${log_size:-0}" -ge 100 ]; then
+            warnings="${warnings}WARN: twistd.log is ${log_size}MB\n"
+          fi
+
+          last_log=$(tail -5 "$log_dir/twistd.log" 2>/dev/null)
+          echo "$last_log" | grep -q "Scheduling retry\|connection already shut down" && \
+            errors="${errors}FAIL: worker disconnected from master\n"
+        else
+          errors="${errors}FAIL: no buildbot.tac found\n"
+        fi
+
+        # Summary
+        hostname=$(hostname)
+        if [ -z "$errors" ] && [ -z "$warnings" ]; then
+          echo "${hostname}: ALL CHECKS PASSED"
+        else
+          printf "${hostname}:\n${errors}${warnings}"
+        fi
+      register: healthcheck
+      changed_when: false
+
+    - name: Show results
+      debug:
+        msg: "{{ healthcheck.stdout_lines }}"
+
+    - name: Fail if any checks failed
+      fail:
+        msg: "Health check failures detected"
+      when: "'FAIL' in healthcheck.stdout"
