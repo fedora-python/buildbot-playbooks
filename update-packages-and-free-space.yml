@@ -37,17 +37,30 @@
   become: true
 
   tasks:
+    - name: Discover buildbot worker service name
+      shell: systemctl list-units --type=service --all --plain --no-legend 'buildbot-worker@*.service' | awk '{print $1}' | head -1
+      register: worker_service
+      changed_when: false
+
+    - name: Discover worker buildarea path
+      shell: systemctl show -p WorkingDirectory "{{ worker_service.stdout }}" | cut -d= -f2
+      register: worker_path
+      changed_when: false
+      when: worker_service.stdout | length > 0
+
     - name: Stop the buildbot worker service
       service:
-        name: buildbot-worker.service
+        name: "{{ worker_service.stdout }}"
         state: stopped
+      when: worker_service.stdout | length > 0
 
     - name: Find the folders to remove and register them to a var
       find:
-        paths: "/home/buildbot/buildarea/"
+        paths: "{{ worker_path.stdout }}"
         file_type: any
         patterns: '3.*,pull_request*,custom*,twistd.log.*'
       register: cleanup
+      when: worker_path.stdout is defined and worker_path.stdout | length > 0
 
     - name: Remove the files
       file:
@@ -56,8 +69,10 @@
       with_items: "{{ cleanup.files }}"
       loop_control:
         label: "{{ item.path }}"
+      when: cleanup.files is defined
 
     - name: Start again the buildbot worker service
       service:
-        name: buildbot-worker.service
+        name: "{{ worker_service.stdout }}"
         state: started
+      when: worker_service.stdout | length > 0
