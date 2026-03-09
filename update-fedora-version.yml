@@ -2,11 +2,6 @@
   hosts: fedora-stable
   become: true
   tasks:
-    - name: Install dnf-plugin
-      dnf:
-        name: dnf-plugin-system-upgrade
-        state: latest
-
     - name: Download the packages
       command: dnf system-upgrade download --refresh --releasever="{{ version }}"
 
