@@ -322,8 +322,8 @@
         enabled: true
         state: started
 
-    - name: Set virtual-guest tuned profile
-      command: tuned-adm profile virtual-guest
+    - name: Set throughput-performance tuned profile
+      command: tuned-adm profile throughput-performance
       changed_when: false
 
     # fstrim for qcow2 disk reclaim
