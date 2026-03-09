@@ -1,5 +1,5 @@
 - name: Add a user with sudo access
-  hosts: buildbots
+  hosts: "{{ target_hosts }}"
   become: true
 
   tasks:
@@ -9,7 +9,7 @@
         groups: wheel
         password: ''
 
-    - name: set their ssh key
+    - name: Deploy SSH key for the user
       authorized_key:
         user: "{{ user }}"
         state: present
