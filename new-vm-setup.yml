@@ -1,0 +1,340 @@
+- name: New VM setup
+  hosts: "{{ target_hosts }}"
+  become: true
+  gather_facts: true
+  tasks:
+    # Ensure admin user exists and has SSH access before hardening
+    - name: Create admin user
+      user:
+        name: "{{ admin_user }}"
+        groups: wheel
+        password: ''
+
+    - name: Deploy admin user SSH key
+      authorized_key:
+        user: "{{ admin_user }}"
+        state: present
+        key: "{{ admin_ssh_key }}"
+
+    # SSHD hardening
+    - name: Remove problematic 01-permitrootlogin.conf drop-in if present
+      file:
+        path: /etc/ssh/sshd_config.d/01-permitrootlogin.conf
+        state: absent
+
+    - name: Set PermitRootLogin no
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Set PasswordAuthentication no
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+
+    - name: Set KbdInteractiveAuthentication no
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?KbdInteractiveAuthentication'
+        line: 'KbdInteractiveAuthentication no'
+
+    - name: Set MaxAuthTries 3
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?MaxAuthTries'
+        line: 'MaxAuthTries 3'
+
+    - name: Set LogLevel VERBOSE
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?LogLevel'
+        line: 'LogLevel VERBOSE'
+
+    - name: Set LoginGraceTime 30
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?LoginGraceTime'
+        line: 'LoginGraceTime 30'
+
+    - name: Set GSSAPIAuthentication no
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?GSSAPIAuthentication'
+        line: 'GSSAPIAuthentication no'
+
+    - name: Disable GSSAPIAuthentication in 50-redhat.conf if present
+      lineinfile:
+        path: /etc/ssh/sshd_config.d/50-redhat.conf
+        regexp: '^GSSAPIAuthentication'
+        line: 'GSSAPIAuthentication no'
+      failed_when: false
+
+    - name: Set AllowUsers
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?AllowUsers'
+        line: 'AllowUsers {{ allowed_users }}'
+
+    - name: Restart sshd
+      service:
+        name: sshd
+        state: restarted
+
+    - name: Force new SSH connection
+      meta: reset_connection
+
+    - name: Verify SSH access still works
+      shell: echo ok
+      register: ssh_verify
+      changed_when: false
+
+    # Firewall
+    - name: Set default zone to drop
+      command: firewall-cmd --set-default-zone=drop
+      changed_when: true
+
+    - name: Allow SSH permanently
+      command: firewall-cmd --permanent --add-service=ssh
+      changed_when: true
+
+    - name: Reload firewall
+      command: firewall-cmd --reload
+      changed_when: true
+
+    # EPEL for RHEL/CentOS (needed for buildbot-worker and fail2ban)
+    - name: Enable CRB repo on CentOS Stream
+      command: dnf config-manager --set-enabled crb
+      when: ansible_distribution == 'CentOS'
+      failed_when: false
+
+    - name: Enable CodeReady Builder on RHEL
+      shell: subscription-manager repos --enable codeready-builder-for-rhel-{{ ansible_distribution_major_version }}-{{ ansible_architecture }}-rpms
+      when: ansible_distribution == 'RedHat'
+      failed_when: false
+
+    - name: Install EPEL on RHEL
+      package:
+        name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+        state: present
+      when: ansible_distribution == 'RedHat'
+      failed_when: false
+
+    - name: Install EPEL on CentOS Stream
+      shell: dnf install -y https://dl.fedoraproject.org/pub/epel/epel{,-next}-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
+      when: ansible_distribution == 'CentOS'
+      failed_when: false
+
+    # Automatic updates
+    - name: Install dnf-automatic
+      package:
+        name: dnf-automatic
+        state: present
+
+    - name: Enable dnf-automatic timer
+      systemd:
+        name: dnf-automatic-install.timer
+        enabled: true
+        state: started
+
+    # Sudoers
+    - name: Set passwordless sudo for admin user
+      copy:
+        content: "{{ admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        dest: "/etc/sudoers.d/{{ admin_user }}"
+        mode: '0440'
+
+    # fail2ban (after EPEL since it comes from EPEL on RHEL/CentOS)
+    - name: Install fail2ban
+      package:
+        name: fail2ban
+        state: present
+
+    - name: Create jail.local for sshd
+      copy:
+        content: |
+          [sshd]
+          enabled = true
+          maxretry = 3
+          bantime = 3600
+          findtime = 600
+        dest: /etc/fail2ban/jail.local
+        mode: '0644'
+
+    - name: Enable and start fail2ban
+      systemd:
+        name: fail2ban
+        enabled: true
+        state: restarted
+
+    # Build dependencies for CPython
+    - name: Install dnf builddep plugin (dnf4)
+      package:
+        name: dnf-plugins-core
+        state: present
+      failed_when: false
+
+    - name: Install dnf builddep plugin (dnf5)
+      package:
+        name: dnf5-plugins
+        state: present
+      failed_when: false
+
+    - name: Install CPython build dependencies
+      command: dnf builddep -y python3
+      changed_when: false
+
+    - name: Install additional build tools
+      package:
+        name:
+          - git
+          - perf
+          - clang
+          - buildbot-worker
+        state: present
+
+    # FIPS workaround: patch Twisted PB auth to allow MD5 for non-security use
+    # See https://github.com/twisted/twisted/pull/11883
+    # Must be done before starting the worker service
+    - name: Find Twisted pb.py location
+      shell: find /usr -path '*/twisted/spread/pb.py' 2>/dev/null | head -1
+      register: twisted_pb_path
+      changed_when: false
+      when: fips_mode | default(false)
+
+    - name: Patch Twisted MD5 calls for FIPS compatibility
+      shell: |
+        sed -i 's/m = md5()/m = md5(usedforsecurity=False)/g' "{{ twisted_pb_path.stdout }}"
+        sed -i 's/md5(crap)/md5(crap, usedforsecurity=False)/g' "{{ twisted_pb_path.stdout }}"
+        sed -i 's/md5(password)/md5(password, usedforsecurity=False)/g' "{{ twisted_pb_path.stdout }}"
+        sed -i 's/md = md5()/md = md5(usedforsecurity=False)/g' "{{ twisted_pb_path.stdout }}"
+      when: fips_mode | default(false) and twisted_pb_path.stdout | length > 0
+
+    # Buildbot worker setup
+    - name: Check available space on /var and /home
+      shell: |
+        var_avail=$(df -BG --output=avail /var | tail -1 | tr -d ' G')
+        home_avail=$(df -BG --output=avail /home 2>/dev/null | tail -1 | tr -d ' G')
+        var_dev=$(df --output=source /var | tail -1)
+        home_dev=$(df --output=source /home 2>/dev/null | tail -1)
+        if [ "$var_dev" != "$home_dev" ] && [ "${home_avail:-0}" -gt "$var_avail" ]; then
+          echo "/home/buildbot-worker"
+        else
+          echo "/var/lib/buildbot/worker"
+        fi
+      register: worker_basedir
+      changed_when: false
+
+    - name: Create worker base directory if using /home
+      file:
+        path: /home/buildbot-worker
+        state: directory
+        owner: buildbot-worker
+        group: buildbot-worker
+        mode: '0755'
+      when: worker_basedir.stdout == '/home/buildbot-worker'
+
+    - name: Create buildbot worker
+      command: >
+        buildbot-worker create-worker
+        {{ worker_basedir.stdout }}/{{ worker_name }}
+        buildbot.python.org:9020
+        {{ worker_name }}
+        {{ worker_password }}
+      args:
+        creates: "{{ worker_basedir.stdout }}/{{ worker_name }}/buildbot.tac"
+      become_user: buildbot-worker
+
+    - name: Create symlink for split disk layout
+      block:
+        - name: Ensure /var/lib/buildbot/worker exists
+          file:
+            path: /var/lib/buildbot/worker
+            state: directory
+
+        - name: Symlink worker directory to /var/lib/buildbot/worker
+          file:
+            src: "/home/buildbot-worker/{{ worker_name }}"
+            dest: "/var/lib/buildbot/worker/{{ worker_name }}"
+            state: link
+      when: worker_basedir.stdout == '/home/buildbot-worker'
+
+    - name: Set delete_leftover_dirs in buildbot.tac
+      lineinfile:
+        path: "{{ worker_basedir.stdout }}/{{ worker_name }}/buildbot.tac"
+        regexp: '^delete_leftover_dirs'
+        line: 'delete_leftover_dirs = 1'
+
+    - name: Set keepalive in buildbot.tac
+      lineinfile:
+        path: "{{ worker_basedir.stdout }}/{{ worker_name }}/buildbot.tac"
+        regexp: '^keepalive'
+        line: 'keepalive = 60'
+
+    - name: Set worker info/admin
+      copy:
+        content: "{{ worker_admin }}"
+        dest: "{{ worker_basedir.stdout }}/{{ worker_name }}/info/admin"
+        owner: buildbot-worker
+        group: buildbot-worker
+      when: worker_admin is defined
+
+    - name: Set worker info/host
+      copy:
+        content: "{{ worker_host }}"
+        dest: "{{ worker_basedir.stdout }}/{{ worker_name }}/info/host"
+        owner: buildbot-worker
+        group: buildbot-worker
+      when: worker_host is defined
+
+    - name: Enable and start buildbot worker service
+      systemd:
+        name: "buildbot-worker@{{ worker_name }}.service"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    # Log management
+    - name: Set journald max disk usage
+      lineinfile:
+        path: /etc/systemd/journald.conf
+        regexp: '^#?SystemMaxUse='
+        line: 'SystemMaxUse=500M'
+      notify: Restart journald
+
+    # Kernel cleanup
+    - name: Set installonly_limit for old kernels
+      lineinfile:
+        path: /etc/dnf/dnf.conf
+        regexp: '^#?installonly_limit='
+        line: 'installonly_limit=3'
+
+    # Performance tuning
+    - name: Install tuned
+      package:
+        name: tuned
+        state: present
+
+    - name: Enable tuned
+      systemd:
+        name: tuned
+        enabled: true
+        state: started
+
+    - name: Set virtual-guest tuned profile
+      command: tuned-adm profile virtual-guest
+      changed_when: false
+
+    # fstrim for qcow2 disk reclaim
+    - name: Enable fstrim timer
+      systemd:
+        name: fstrim.timer
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart journald
+      systemd:
+        name: systemd-journald
+        state: restarted
