@@ -1,10 +1,19 @@
-- name: Update all stable fedora's to the next version
-  hosts: fedora-stable
+- name: Update Fedora machines to the next version
+  hosts: "{{ target_hosts }}"
   become: true
+  serial: 1
   tasks:
     - name: Download the packages
-      command: dnf system-upgrade download --refresh --releasever="{{ version }}"
+      command: dnf system-upgrade download --refresh -y --releasever="{{ version }}"
 
     - name: Begin the update process
-      command: dnf system-upgrade reboot
+      shell: dnf system-upgrade reboot
+      async: 1
+      poll: 0
+      ignore_unreachable: true
+
+    - name: Wait for machine to come back
+      wait_for_connection:
+        delay: 60
+        timeout: 600
 
