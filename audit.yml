@@ -1,0 +1,62 @@
+- name: Audit buildbot worker machines
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Gather system and buildbot worker information
+      shell: |
+        echo '=== HOSTNAME ==='
+        hostname
+        echo '=== OS ==='
+        cat /etc/redhat-release 2>/dev/null || cat /etc/os-release 2>/dev/null | head -3
+        echo '=== KERNEL ==='
+        uname -rm
+        echo '=== USERS ==='
+        id buildbot 2>/dev/null || echo 'no buildbot user'
+        id buildbot-worker 2>/dev/null || echo 'no buildbot-worker user'
+        echo '=== USERS WITH LOGIN SHELLS ==='
+        awk -F: '$7 !~ /(nologin|false|sync|shutdown|halt)$/ && $3 >= 1000 {print $1, "uid="$3, "shell="$7}' /etc/passwd
+        echo '=== WHEEL GROUP ==='
+        getent group wheel 2>/dev/null || echo 'no wheel group'
+        echo '=== BUILDBOT INSTALL ==='
+        rpm -q buildbot-worker 2>/dev/null || echo 'no rpm'
+        pip3 show buildbot-worker 2>/dev/null | grep -E 'Name|Version|Location' || echo 'no pip'
+        echo '=== BUILDBOT SERVICE ==='
+        systemctl list-units --type=service --all --plain --no-legend 2>/dev/null | grep -i buildbot || echo 'no buildbot service'
+        echo '=== BUILDBOT PROCESS ==='
+        ps -eo user,pid,args 2>/dev/null | grep buildbot-worker | grep -v grep || echo 'no process'
+        echo '=== BUILDBOT WORKER DIRS ==='
+        find /var/lib/buildbot/worker -maxdepth 1 -mindepth 1 -type d 2>/dev/null || echo 'no /var/lib/buildbot/worker dirs'
+        find /var/lib/buildbot/worker -maxdepth 1 -mindepth 1 -type l -exec readlink -f {} \; 2>/dev/null
+        echo '=== BUILDBOT.TAC ==='
+        find /var/lib/buildbot/worker /home/buildbot-worker -name buildbot.tac -exec echo "FILE: {}" \; -exec grep -E 'workername|buildmaster_host|port|keepalive|delete_leftover_dirs' {} \; 2>/dev/null || echo 'not found'
+        echo '=== SELINUX ==='
+        getenforce 2>/dev/null || echo 'no selinux'
+        semodule -l 2>/dev/null | grep my- || echo 'no custom selinux modules'
+        echo '=== FIREWALL ==='
+        firewall-cmd --get-default-zone 2>/dev/null || echo 'no firewalld'
+        firewall-cmd --list-services 2>/dev/null || echo 'no firewall rules'
+        echo '=== SSHD ==='
+        grep -E '^(PermitRootLogin|PasswordAuthentication|KbdInteractiveAuthentication|MaxAuthTries|AllowUsers|LogLevel)' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || echo 'no sshd hardening'
+        echo '=== FAIL2BAN ==='
+        systemctl is-active fail2ban 2>/dev/null || echo 'fail2ban not active'
+        echo '=== TUNED ==='
+        tuned-adm active 2>/dev/null || echo 'tuned not available'
+        echo '=== AUTOMATIC UPDATES ==='
+        systemctl is-active dnf-automatic-install.timer 2>/dev/null || echo 'dnf-automatic not active'
+        echo '=== FSTRIM ==='
+        systemctl is-active fstrim.timer 2>/dev/null || echo 'fstrim timer not active'
+        echo '=== JOURNALD ==='
+        grep -E '^SystemMaxUse' /etc/systemd/journald.conf 2>/dev/null || echo 'SystemMaxUse not set'
+        echo '=== DNF CONFIG ==='
+        grep -E '^installonly_limit' /etc/dnf/dnf.conf 2>/dev/null || echo 'installonly_limit not set'
+        echo '=== MEMORY ==='
+        free -h
+        echo '=== DISK ==='
+        df -h / /home /var 2>/dev/null
+      register: audit
+      changed_when: false
+
+    - name: Show results
+      debug:
+        var: audit.stdout_lines

@@ -39,6 +39,23 @@ Example:
       -e "worker_admin='My Name <email AT example.com>'" \
       -e "worker_host='Fedora Rawhide x86_64'"
 
+### audit.yml
+
+Audits all buildbot worker machines and reports their current state:
+system info, users, buildbot installation and service status, security
+settings (SELinux, firewall, sshd, fail2ban), system tuning (tuned,
+automatic updates, fstrim, journald, dnf), and resource usage (memory,
+disk).
+
+Optional variables:
+
+- `target_hosts` - host or group to target (defaults to `all`)
+
+Example:
+
+    ansible-playbook audit.yml
+    ansible-playbook audit.yml -e "target_hosts=myhost"
+
 ### update-packages-and-free-space.yml
 
 Updates all packages, reboots if needed, cleans systemd logs older than
