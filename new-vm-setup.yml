@@ -127,16 +127,32 @@
       failed_when: false
 
     # Automatic updates
-    - name: Install dnf-automatic
+    - name: Install dnf-automatic (dnf4)
       package:
         name: dnf-automatic
         state: present
+      failed_when: false
 
-    - name: Enable dnf-automatic timer
+    - name: Enable dnf-automatic-install timer (RHEL 8)
       systemd:
         name: dnf-automatic-install.timer
         enabled: true
         state: started
+      failed_when: false
+
+    - name: Enable dnf-automatic timer (CentOS Stream / RHEL 9)
+      systemd:
+        name: dnf-automatic.timer
+        enabled: true
+        state: started
+      failed_when: false
+
+    - name: Enable dnf5-automatic timer (Fedora)
+      systemd:
+        name: dnf5-automatic.timer
+        enabled: true
+        state: started
+      failed_when: false
 
     # Sudoers
     - name: Set passwordless sudo for admin user

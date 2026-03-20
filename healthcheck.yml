@@ -16,7 +16,9 @@
         systemctl is-active tuned >/dev/null 2>&1 || \
           warnings="${warnings}WARN: tuned not active\n"
         systemctl is-active dnf-automatic-install.timer >/dev/null 2>&1 || \
-          warnings="${warnings}WARN: dnf-automatic-install.timer not active\n"
+          systemctl is-active dnf-automatic.timer >/dev/null 2>&1 || \
+          systemctl is-active dnf5-automatic.timer >/dev/null 2>&1 || \
+          warnings="${warnings}WARN: no automatic updates timer active\n"
         systemctl is-active fstrim.timer >/dev/null 2>&1 || \
           warnings="${warnings}WARN: fstrim.timer not active\n"
 
