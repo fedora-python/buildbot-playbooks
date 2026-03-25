@@ -21,6 +21,8 @@
           warnings="${warnings}WARN: no automatic updates timer active\n"
         systemctl is-active fstrim.timer >/dev/null 2>&1 || \
           warnings="${warnings}WARN: fstrim.timer not active\n"
+        systemctl is-active chronyd >/dev/null 2>&1 || \
+          warnings="${warnings}WARN: chronyd not active\n"
 
         # Security checks
         selinux_status=$(getenforce 2>/dev/null)
