@@ -29,6 +29,39 @@
         fi
         grep -q '^PasswordAuthentication yes' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null && \
           errors="${errors}FAIL: PasswordAuthentication is enabled\n"
+        grep -q '^PermitRootLogin no' /etc/ssh/sshd_config 2>/dev/null || \
+          errors="${errors}FAIL: PermitRootLogin is not set to no\n"
+        grep -q '^KbdInteractiveAuthentication no' /etc/ssh/sshd_config 2>/dev/null || \
+          warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
+        grep -q '^MaxAuthTries 3' /etc/ssh/sshd_config 2>/dev/null || \
+          warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
+        grep -q '^LogLevel VERBOSE' /etc/ssh/sshd_config 2>/dev/null || \
+          warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
+        grep -q '^LoginGraceTime 30' /etc/ssh/sshd_config 2>/dev/null || \
+          warnings="${warnings}WARN: LoginGraceTime not set to 30\n"
+        grep -q '^GSSAPIAuthentication no' /etc/ssh/sshd_config 2>/dev/null || \
+          warnings="${warnings}WARN: GSSAPIAuthentication not set to no\n"
+        grep -q '^AllowUsers' /etc/ssh/sshd_config 2>/dev/null || \
+          errors="${errors}FAIL: AllowUsers not configured\n"
+
+        default_zone=$(firewall-cmd --get-default-zone 2>/dev/null)
+        if [ -n "$default_zone" ] && [ "$default_zone" != "drop" ] && [ "$default_zone" != "block" ]; then
+          errors="${errors}FAIL: firewall default zone is ${default_zone}, expected drop or block\n"
+        fi
+        if [ -n "$default_zone" ]; then
+          fw_services=$(firewall-cmd --list-services 2>/dev/null)
+          for svc in $fw_services; do
+            case "$svc" in
+              ssh|dhcpv6-client) ;;
+              *) warnings="${warnings}WARN: unexpected firewall service: ${svc}\n" ;;
+            esac
+          done
+        fi
+
+        avc_count=$(ausearch -m avc -ts recent 2>/dev/null | grep -c '^type=AVC' || true)
+        if [ "$avc_count" -gt 0 ]; then
+          warnings="${warnings}WARN: ${avc_count} recent SELinux AVC denials\n"
+        fi
 
         # Resource checks
         root_usage=$(df / --output=pcent | tail -1 | tr -d ' %')
@@ -59,6 +92,16 @@
         coredump_size=$(du -sm /var/lib/systemd/coredump/ 2>/dev/null | awk '{print $1}')
         if [ "${coredump_size:-0}" -ge 1024 ]; then
           warnings="${warnings}WARN: coredumps using ${coredump_size}MB\n"
+        fi
+
+        # System configuration checks
+        grep -q '^SystemMaxUse=500M' /etc/systemd/journald.conf 2>/dev/null || \
+          warnings="${warnings}WARN: journald SystemMaxUse not set to 500M\n"
+        grep -q '^installonly_limit=3' /etc/dnf/dnf.conf 2>/dev/null || \
+          warnings="${warnings}WARN: installonly_limit not set to 3\n"
+        tuned_profile=$(tuned-adm active 2>/dev/null | awk -F': ' '{print $2}')
+        if [ -n "$tuned_profile" ] && [ "$tuned_profile" != "throughput-performance" ]; then
+          warnings="${warnings}WARN: tuned profile is ${tuned_profile}, expected throughput-performance\n"
         fi
 
         # Buildbot-specific checks
