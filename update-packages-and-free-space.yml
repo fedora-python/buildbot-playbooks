@@ -1,3 +1,44 @@
+- name: Pre-update boot cleanup
+  become: true
+  hosts: buildbots
+
+  tasks:
+    - name: Remove duplicate rescue kernels from /boot
+      shell: |
+        rescue_kernels=$(ls -t /boot/vmlinuz-0-rescue-* 2>/dev/null)
+        count=$(echo "$rescue_kernels" | grep -c . 2>/dev/null || echo 0)
+        if [ "$count" -le 1 ]; then
+          echo "No duplicate rescue kernels"
+          exit 0
+        fi
+        echo "$rescue_kernels" | tail -n +2 | while read -r kernel; do
+          machine_id=$(echo "$kernel" | sed 's|/boot/vmlinuz-0-rescue-||')
+          echo "Removing rescue pair for: $machine_id"
+          rm -f "/boot/vmlinuz-0-rescue-${machine_id}"
+          rm -f "/boot/initramfs-0-rescue-${machine_id}.img"
+        done
+      register: rescue_cleanup
+      changed_when: "'Removing' in rescue_cleanup.stdout"
+      failed_when: false
+
+    - name: Remove kdump images for non-running kernels
+      shell: |
+        running=$(uname -r)
+        removed=0
+        for f in /boot/vmlinuz-*-kdump /boot/initramfs-*-kdump.img; do
+          [ -e "$f" ] || continue
+          kver=$(basename "$f" | sed -E 's/^(vmlinuz|initramfs)-//; s/(-kdump\.img|-kdump)$//')
+          if [ "$kver" != "$running" ]; then
+            echo "Removing: $f"
+            rm -f "$f"
+            removed=$((removed + 1))
+          fi
+        done
+        echo "Removed $removed kdump file(s)"
+      register: kdump_cleanup
+      changed_when: "'Removing:' in kdump_cleanup.stdout"
+      failed_when: false
+
 - name: Install packages, reboot and clean cache
   become: true
   hosts: buildbots
@@ -22,6 +63,35 @@
   handlers:
     - name: Reboot after update
       reboot:
+
+- name: Remove old kernels beyond installonly_limit
+  become: true
+  hosts: buildbots
+
+  tasks:
+    - name: Remove old kernels if beyond installonly_limit
+      shell: |
+        limit=$(grep -oE 'installonly_limit=[0-9]+' /etc/dnf/dnf.conf 2>/dev/null | cut -d= -f2)
+        limit=${limit:-3}
+        running=$(uname -r)
+        kernels=$(rpm -q kernel-core --queryformat '%{INSTALLTIME} %{VERSION}-%{RELEASE}.%{ARCH}\n' 2>/dev/null | sort -n | awk '{print $2}')
+        count=$(echo "$kernels" | grep -c . 2>/dev/null || echo 0)
+        if [ "$count" -le "$limit" ]; then
+          echo "Only $count kernel(s) installed, limit is $limit, nothing to remove"
+          exit 0
+        fi
+        to_remove=$(echo "$kernels" | head -n -${limit})
+        for kver in $to_remove; do
+          if [ "$kver" = "$running" ]; then
+            echo "Skipping running kernel: $kver"
+            continue
+          fi
+          echo "Removing kernel: $kver"
+          dnf remove -y kernel-core-${kver} 2>/dev/null || rpm -e kernel-core-${kver} 2>/dev/null || true
+        done
+      register: kernel_cleanup
+      changed_when: "'Removing kernel' in kernel_cleanup.stdout"
+      failed_when: false
 
 - name: Clean the systemd logs
   gather_facts: no
