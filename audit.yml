@@ -54,6 +54,28 @@
         free -h
         echo '=== DISK ==='
         df -h / /home /var 2>/dev/null
+        echo '=== BOOT ==='
+        df -h /boot 2>/dev/null
+        ls -la /boot/ 2>/dev/null
+        echo '=== FIRMWARE ==='
+        fw_count=$(rpm -qa | grep -i firmware | wc -l)
+        echo "${fw_count} firmware packages installed"
+        if [ "$fw_count" -gt 5 ]; then
+          echo "NOTE: more than 5 firmware packages on a VM"
+          rpm -qa | grep -i firmware | sort
+        fi
+        echo '=== JOURNAL DISK USAGE ==='
+        journalctl --disk-usage 2>/dev/null
+        echo '=== INSTALLED KERNELS ==='
+        kernel_count=$(rpm -qa kernel-core 2>/dev/null | wc -l)
+        echo "${kernel_count} kernel(s) installed"
+        rpm -qa kernel-core 2>/dev/null | sort
+        echo '=== FAIL2BAN JAILS ==='
+        fail2ban-client status sshd 2>/dev/null || echo 'fail2ban sshd jail not available'
+        echo '=== BOOT ORPHANS ==='
+        rescue_count=$(ls /boot/vmlinuz-0-rescue-* 2>/dev/null | wc -l)
+        kdump_count=$(ls /boot/vmlinuz-*-kdump /boot/initramfs-*-kdump* 2>/dev/null | wc -l)
+        echo "${rescue_count} rescue image(s), ${kdump_count} kdump image(s)"
       register: audit
       changed_when: false
 
