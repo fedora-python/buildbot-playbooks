@@ -311,12 +311,21 @@
         state: started
         daemon_reload: true
 
-    # Log management
+    # Log management: use a drop-in because newer Fedora (systemd 256+)
+    # no longer ships /etc/systemd/journald.conf
+    - name: Create journald drop-in directory
+      file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        mode: '0755'
+
     - name: Set journald max disk usage
-      lineinfile:
-        path: /etc/systemd/journald.conf
-        regexp: '^#?SystemMaxUse='
-        line: 'SystemMaxUse=500M'
+      copy:
+        content: |
+          [Journal]
+          SystemMaxUse=500M
+        dest: /etc/systemd/journald.conf.d/99-buildbot.conf
+        mode: '0644'
       notify: Restart journald
 
     # Kernel cleanup
