@@ -97,7 +97,7 @@
         fi
 
         # System configuration checks
-        grep -q '^SystemMaxUse=500M' /etc/systemd/journald.conf 2>/dev/null || \
+        grep -rq '^SystemMaxUse=500M' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/ 2>/dev/null || \
           warnings="${warnings}WARN: journald SystemMaxUse not set to 500M\n"
         grep -q '^installonly_limit=3' /etc/dnf/dnf.conf 2>/dev/null || \
           warnings="${warnings}WARN: installonly_limit not set to 3\n"

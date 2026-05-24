@@ -47,7 +47,7 @@
         echo '=== FSTRIM ==='
         systemctl is-active fstrim.timer 2>/dev/null || echo 'fstrim timer not active'
         echo '=== JOURNALD ==='
-        grep -E '^SystemMaxUse' /etc/systemd/journald.conf 2>/dev/null || echo 'SystemMaxUse not set'
+        grep -rE '^SystemMaxUse' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/ 2>/dev/null || echo 'SystemMaxUse not set'
         echo '=== DNF CONFIG ==='
         grep -E '^installonly_limit' /etc/dnf/dnf.conf 2>/dev/null || echo 'installonly_limit not set'
         echo '=== MEMORY ==='
