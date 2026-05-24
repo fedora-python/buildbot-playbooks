@@ -106,6 +106,33 @@
           warnings="${warnings}WARN: tuned profile is ${tuned_profile}, expected throughput-performance\n"
         fi
 
+        # Boot filesystem and kernel checks
+        boot_usage=$(df /boot --output=pcent 2>/dev/null | tail -1 | tr -d ' %')
+        if [ -n "$boot_usage" ]; then
+          if [ "$boot_usage" -ge 90 ]; then
+            errors="${errors}FAIL: /boot filesystem at ${boot_usage}%\n"
+          elif [ "$boot_usage" -ge 75 ]; then
+            warnings="${warnings}WARN: /boot filesystem at ${boot_usage}%\n"
+          fi
+        fi
+
+        journal_usage=$(journalctl --disk-usage 2>/dev/null)
+        if echo "$journal_usage" | grep -qE '[0-9]+\.?[0-9]*G'; then
+          journal_size=$(echo "$journal_usage" | grep -oE '[0-9]+\.?[0-9]*G' | head -1)
+          warnings="${warnings}WARN: journal using ${journal_size} on disk\n"
+        fi
+
+        rescue_count=$(ls /boot/vmlinuz-0-rescue-* 2>/dev/null | wc -l)
+        if [ "$rescue_count" -gt 1 ]; then
+          warnings="${warnings}WARN: ${rescue_count} rescue kernels in /boot (expected 1)\n"
+        fi
+
+        kernel_count=$(rpm -qa kernel-core 2>/dev/null | wc -l)
+        install_limit=$(grep -oE 'installonly_limit=[0-9]+' /etc/dnf/dnf.conf 2>/dev/null | cut -d= -f2)
+        if [ -n "$install_limit" ] && [ "$kernel_count" -gt "$install_limit" ]; then
+          warnings="${warnings}WARN: ${kernel_count} kernels installed, installonly_limit is ${install_limit}\n"
+        fi
+
         # Buildbot-specific checks
         tac_file=$(find /var/lib/buildbot/worker /home/buildbot-worker -name buildbot.tac 2>/dev/null | head -1)
         if [ -n "$tac_file" ]; then
