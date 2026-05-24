@@ -349,6 +349,78 @@
         enabled: true
         state: started
 
+    # Firmware cleanup: VMs have no WiFi/GPU/audio hardware
+    - name: Remove unnecessary firmware packages
+      package:
+        name:
+          - amd-gpu-firmware
+          - nvidia-gpu-firmware
+          - atheros-firmware
+          - intel-gpu-firmware
+          - intel-audio-firmware
+          - iwlax2xx-firmware
+          - iwl7260-firmware
+          - iwl6050-firmware
+          - iwl6000g2b-firmware
+          - iwl6000g2a-firmware
+          - iwl5150-firmware
+          - iwl5000-firmware
+          - iwl4965-firmware
+          - iwl3945-firmware
+          - iwl2030-firmware
+          - iwl2000-firmware
+          - iwl1000-firmware
+          - iwl105-firmware
+          - iwl100-firmware
+          - iwl135-firmware
+          - brcmfmac-firmware
+          - mt7xxx-firmware
+          - tiwilink-firmware
+          - atmel-firmware
+          - libertas-firmware
+          - zd1211-firmware
+          - realtek-firmware
+        state: absent
+      when: ansible_virtualization_role == 'guest'
+      failed_when: false
+
+    - name: Remove fwupd on Fedora
+      package:
+        name: fwupd
+        state: absent
+      when: ansible_virtualization_role == 'guest' and ansible_distribution == 'Fedora'
+      failed_when: false
+
+    # On RHEL 8 / CentOS Stream 9, fwupd removal cascades into shim-*
+    # (EFI boot chain), so only remove the flashrom plugin
+    - name: Remove fwupd-plugin-flashrom on RHEL/CentOS
+      package:
+        name:
+          - fwupd-plugin-flashrom
+          - flashrom
+        state: absent
+      when: ansible_virtualization_role == 'guest' and ansible_distribution in ['RedHat', 'CentOS']
+      failed_when: false
+
+    # Boot cleanup: keep only the newest rescue kernel pair
+    - name: Remove duplicate rescue kernels from /boot
+      shell: |
+        rescue_kernels=$(ls -t /boot/vmlinuz-0-rescue-* 2>/dev/null)
+        count=$(echo "$rescue_kernels" | grep -c . 2>/dev/null || echo 0)
+        if [ "$count" -le 1 ]; then
+          echo "No duplicate rescue kernels"
+          exit 0
+        fi
+        echo "$rescue_kernels" | tail -n +2 | while read -r kernel; do
+          machine_id=$(echo "$kernel" | sed 's|/boot/vmlinuz-0-rescue-||')
+          echo "Removing rescue pair for: $machine_id"
+          rm -f "/boot/vmlinuz-0-rescue-${machine_id}"
+          rm -f "/boot/initramfs-0-rescue-${machine_id}.img"
+        done
+      register: rescue_cleanup
+      changed_when: "'Removing' in rescue_cleanup.stdout"
+      failed_when: false
+
   handlers:
     - name: Restart journald
       systemd:
