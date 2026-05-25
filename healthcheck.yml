@@ -119,8 +119,13 @@
         # System configuration checks
         grep -rq '^SystemMaxUse=500M' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/ 2>/dev/null || \
           warnings="${warnings}WARN: journald SystemMaxUse not set to 500M\n"
-        grep -q '^installonly_limit=3' /etc/dnf/dnf.conf 2>/dev/null || \
-          warnings="${warnings}WARN: installonly_limit not set to 3\n"
+        eff_limit=$(dnf --dump-main-config 2>/dev/null | awk '/^installonly_limit/{print $3}')
+        if [ -z "$eff_limit" ]; then
+          eff_limit=$(python3 -c 'import dnf; b = dnf.Base(); b.conf.read(); print(b.conf.installonly_limit)' 2>/dev/null)
+        fi
+        if [ -n "$eff_limit" ] && [ "$eff_limit" != "3" ]; then
+          warnings="${warnings}WARN: installonly_limit is ${eff_limit}, expected 3\n"
+        fi
         tuned_profile=$(tuned-adm active 2>/dev/null | awk -F': ' '{print $2}')
         if [ -n "$tuned_profile" ] && [ "$tuned_profile" != "throughput-performance" ]; then
           warnings="${warnings}WARN: tuned profile is ${tuned_profile}, expected throughput-performance\n"
@@ -148,9 +153,8 @@
         fi
 
         kernel_count=$(rpm -qa kernel-core 2>/dev/null | wc -l)
-        install_limit=$(grep -oE 'installonly_limit=[0-9]+' /etc/dnf/dnf.conf 2>/dev/null | cut -d= -f2)
-        if [ -n "$install_limit" ] && [ "$kernel_count" -gt "$install_limit" ]; then
-          warnings="${warnings}WARN: ${kernel_count} kernels installed, installonly_limit is ${install_limit}\n"
+        if [ -n "$eff_limit" ] && [ "$kernel_count" -gt "$eff_limit" ]; then
+          warnings="${warnings}WARN: ${kernel_count} kernels installed, installonly_limit is ${eff_limit}\n"
         fi
 
         # Buildbot-specific checks
