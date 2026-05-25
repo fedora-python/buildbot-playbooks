@@ -48,8 +48,8 @@
           echo "$sshd_effective" | grep -q '^allowusers ' || \
             errors="${errors}FAIL: AllowUsers not configured\n"
         else
-          grep -q '^PasswordAuthentication yes' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null && \
-            errors="${errors}FAIL: PasswordAuthentication is enabled\n"
+          grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            errors="${errors}FAIL: PasswordAuthentication is not set to no\n"
           grep -q '^PermitRootLogin no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
             errors="${errors}FAIL: PermitRootLogin is not set to no\n"
           grep -q '^KbdInteractiveAuthentication no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
