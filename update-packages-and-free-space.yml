@@ -71,7 +71,7 @@
   tasks:
     - name: Remove old kernels if beyond installonly_limit
       shell: |
-        limit=$(grep -oE 'installonly_limit=[0-9]+' /etc/dnf/dnf.conf 2>/dev/null | cut -d= -f2)
+        limit=$(grep -oE '^installonly_limit=[0-9]+' /etc/dnf/dnf.conf 2>/dev/null | cut -d= -f2)
         limit=${limit:-3}
         running=$(uname -r)
         kernels=$(rpm -q kernel-core --queryformat '%{INSTALLTIME} %{VERSION}-%{RELEASE}.%{ARCH}\n' 2>/dev/null | sort -n | awk '{print $2}')
