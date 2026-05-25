@@ -29,22 +29,42 @@
         if [ "$selinux_status" != "Enforcing" ] && [ -n "$selinux_status" ]; then
           errors="${errors}FAIL: SELinux is ${selinux_status}, expected Enforcing\n"
         fi
-        grep -q '^PasswordAuthentication yes' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null && \
-          errors="${errors}FAIL: PasswordAuthentication is enabled\n"
-        grep -q '^PermitRootLogin no' /etc/ssh/sshd_config 2>/dev/null || \
-          errors="${errors}FAIL: PermitRootLogin is not set to no\n"
-        grep -q '^KbdInteractiveAuthentication no' /etc/ssh/sshd_config 2>/dev/null || \
-          warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
-        grep -q '^MaxAuthTries 3' /etc/ssh/sshd_config 2>/dev/null || \
-          warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
-        grep -q '^LogLevel VERBOSE' /etc/ssh/sshd_config 2>/dev/null || \
-          warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
-        grep -q '^LoginGraceTime 30' /etc/ssh/sshd_config 2>/dev/null || \
-          warnings="${warnings}WARN: LoginGraceTime not set to 30\n"
-        grep -q '^GSSAPIAuthentication no' /etc/ssh/sshd_config 2>/dev/null || \
-          warnings="${warnings}WARN: GSSAPIAuthentication not set to no\n"
-        grep -q '^AllowUsers' /etc/ssh/sshd_config 2>/dev/null || \
-          errors="${errors}FAIL: AllowUsers not configured\n"
+        sshd_effective=$(sshd -T 2>/dev/null)
+        if [ -n "$sshd_effective" ]; then
+          echo "$sshd_effective" | grep -q '^passwordauthentication no' || \
+            errors="${errors}FAIL: PasswordAuthentication is not set to no\n"
+          echo "$sshd_effective" | grep -q '^permitrootlogin no' || \
+            errors="${errors}FAIL: PermitRootLogin is not set to no\n"
+          echo "$sshd_effective" | grep -q '^kbdinteractiveauthentication no' || \
+            warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
+          echo "$sshd_effective" | grep -q '^maxauthtries 3' || \
+            warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
+          echo "$sshd_effective" | grep -q '^loglevel VERBOSE' || \
+            warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
+          echo "$sshd_effective" | grep -q '^logingracetime 30' || \
+            warnings="${warnings}WARN: LoginGraceTime not set to 30\n"
+          echo "$sshd_effective" | grep -q '^gssapiauthentication no' || \
+            warnings="${warnings}WARN: GSSAPIAuthentication not set to no\n"
+          echo "$sshd_effective" | grep -q '^allowusers ' || \
+            errors="${errors}FAIL: AllowUsers not configured\n"
+        else
+          grep -q '^PasswordAuthentication yes' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null && \
+            errors="${errors}FAIL: PasswordAuthentication is enabled\n"
+          grep -q '^PermitRootLogin no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            errors="${errors}FAIL: PermitRootLogin is not set to no\n"
+          grep -q '^KbdInteractiveAuthentication no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
+          grep -q '^MaxAuthTries 3' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
+          grep -q '^LogLevel VERBOSE' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
+          grep -q '^LoginGraceTime 30' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: LoginGraceTime not set to 30\n"
+          grep -q '^GSSAPIAuthentication no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: GSSAPIAuthentication not set to no\n"
+          grep -q '^AllowUsers' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            errors="${errors}FAIL: AllowUsers not configured\n"
+        fi
 
         default_zone=$(firewall-cmd --get-default-zone 2>/dev/null)
         if [ -n "$default_zone" ] && [ "$default_zone" != "drop" ] && [ "$default_zone" != "block" ]; then
