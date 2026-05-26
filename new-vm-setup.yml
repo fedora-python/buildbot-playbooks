@@ -232,6 +232,14 @@
       when: fips_mode | default(false) and twisted_pb_path.stdout | length > 0
 
     # Buildbot worker setup
+    - name: Ensure /var/lib/buildbot/worker is owned by buildbot-worker
+      file:
+        path: /var/lib/buildbot/worker
+        state: directory
+        owner: buildbot-worker
+        group: buildbot-worker
+        mode: '0755'
+
     - name: Check available space on /var and /home
       shell: |
         var_avail=$(df -BG --output=avail /var | tail -1 | tr -d ' G')
