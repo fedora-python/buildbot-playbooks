@@ -131,6 +131,7 @@
       package:
         name: dnf-automatic
         state: present
+      when: ansible_distribution != 'Fedora'
       failed_when: false
 
     - name: Enable dnf-automatic-install timer (RHEL 8)
@@ -138,13 +139,15 @@
         name: dnf-automatic-install.timer
         enabled: true
         state: started
+      when: ansible_distribution == 'RedHat' and ansible_distribution_major_version == '8'
       failed_when: false
 
-    - name: Enable dnf-automatic timer (CentOS Stream / RHEL 9)
+    - name: Enable dnf-automatic timer (CentOS Stream / RHEL 9+)
       systemd:
         name: dnf-automatic.timer
         enabled: true
         state: started
+      when: ansible_distribution == 'CentOS' or (ansible_distribution == 'RedHat' and ansible_distribution_major_version | int >= 9)
       failed_when: false
 
     - name: Enable dnf5-automatic timer (Fedora)
@@ -152,6 +155,7 @@
         name: dnf5-automatic.timer
         enabled: true
         state: started
+      when: ansible_distribution == 'Fedora'
       failed_when: false
 
     # Sudoers
@@ -228,6 +232,14 @@
       when: fips_mode | default(false) and twisted_pb_path.stdout | length > 0
 
     # Buildbot worker setup
+    - name: Ensure /var/lib/buildbot/worker is owned by buildbot-worker
+      file:
+        path: /var/lib/buildbot/worker
+        state: directory
+        owner: buildbot-worker
+        group: buildbot-worker
+        mode: '0755'
+
     - name: Check available space on /var and /home
       shell: |
         var_avail=$(df -BG --output=avail /var | tail -1 | tr -d ' G')
