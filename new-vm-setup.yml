@@ -193,12 +193,14 @@
       package:
         name: dnf-plugins-core
         state: present
+      when: ansible_distribution != 'Fedora'
       failed_when: false
 
     - name: Install dnf builddep plugin (dnf5)
       package:
         name: dnf5-plugins
         state: present
+      when: ansible_distribution == 'Fedora'
       failed_when: false
 
     - name: Install CPython build dependencies
