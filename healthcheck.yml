@@ -117,7 +117,7 @@
         fi
 
         # System configuration checks
-        grep -rq '^SystemMaxUse=500M' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/ 2>/dev/null || \
+        systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -q '^SystemMaxUse=500M' || \
           warnings="${warnings}WARN: journald SystemMaxUse not set to 500M\n"
         eff_limit=$(dnf --dump-main-config 2>/dev/null | awk '/^installonly_limit/{print $3}')
         if [ -z "$eff_limit" ]; then
