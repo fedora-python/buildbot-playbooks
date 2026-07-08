@@ -157,6 +157,33 @@
           warnings="${warnings}WARN: ${kernel_count} kernels installed, installonly_limit is ${eff_limit}\n"
         fi
 
+        # SystemTap checks for CPython test_dtrace
+        os_id=""
+        os_version_id=""
+        if [ -r /etc/os-release ]; then
+          . /etc/os-release
+          os_id=${ID:-}
+          os_version_id=${VERSION_ID%%.*}
+        fi
+        if ! { [ "$os_id" = "rhel" ] || [ "$os_id" = "centos" ]; } || [ "${os_version_id:-0}" -gt 8 ]; then
+          rpm -q systemtap-client >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: systemtap-client not installed\n"
+          rpm -q systemtap-runtime >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: systemtap-runtime not installed\n"
+          rpm -q systemtap-devel >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: systemtap-devel not installed\n"
+          rpm -q "kernel-devel-$(uname -r)" >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: matching kernel-devel for $(uname -r) not installed\n"
+          command -v stap >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: stap command not available\n"
+          command -v dtrace >/dev/null 2>&1 || \
+            warnings="${warnings}WARN: dtrace command not available\n"
+          id -nG buildbot-worker 2>/dev/null | grep -qw stapusr || \
+            warnings="${warnings}WARN: buildbot-worker is not in stapusr\n"
+          id -nG buildbot-worker 2>/dev/null | grep -qw stapdev || \
+            warnings="${warnings}WARN: buildbot-worker is not in stapdev\n"
+        fi
+
         # Buildbot-specific checks
         tac_file=$(find /var/lib/buildbot/worker /home/buildbot-worker -name buildbot.tac 2>/dev/null | head -1)
         if [ -n "$tac_file" ]; then
