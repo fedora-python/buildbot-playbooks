@@ -216,6 +216,26 @@
           - buildbot-worker
         state: present
 
+    - name: Install SystemTap packages for CPython test_dtrace
+      package:
+        name:
+          - systemtap-client
+          - systemtap-runtime
+          - systemtap-devel
+          - "kernel-devel-{{ ansible_kernel }}"
+        state: present
+      when: not (ansible_distribution in ['RedHat', 'CentOS'] and ansible_distribution_major_version | int <= 8)
+
+    - name: Allow buildbot worker to run SystemTap tests without sudo
+      user:
+        name: buildbot-worker
+        groups:
+          - stapusr
+          - stapdev
+        append: true
+      when: not (ansible_distribution in ['RedHat', 'CentOS'] and ansible_distribution_major_version | int <= 8)
+      notify: Restart buildbot worker
+
     # FIPS workaround: patch Twisted PB auth to allow MD5 for non-security use
     # See https://github.com/twisted/twisted/pull/11883
     # Must be done before starting the worker service
@@ -445,6 +465,11 @@
       failed_when: false
 
   handlers:
+    - name: Restart buildbot worker
+      systemd:
+        name: "buildbot-worker@{{ worker_name }}.service"
+        state: restarted
+
     - name: Restart journald
       systemd:
         name: systemd-journald
