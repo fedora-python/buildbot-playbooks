@@ -224,7 +224,7 @@
           - systemtap-client
           - systemtap-runtime
           - systemtap-devel
-          - "kernel-devel-{{ ansible_kernel }}"
+          - kernel-devel
         state: present
       when: not (ansible_distribution in ['RedHat', 'CentOS'] and ansible_distribution_major_version | int <= 8)
 
