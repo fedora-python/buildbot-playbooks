@@ -114,17 +114,19 @@
       when: ansible_distribution == 'RedHat'
       failed_when: false
 
-    - name: Install EPEL on RHEL
-      package:
-        name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
-        state: present
-      when: ansible_distribution == 'RedHat'
-      failed_when: false
+    - name: Install EPEL release RPM
+      command: dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
+      args:
+        creates: /etc/yum.repos.d/epel.repo
+      when: ansible_distribution in ['RedHat', 'CentOS']
 
-    - name: Install EPEL on CentOS Stream
-      shell: dnf install -y https://dl.fedoraproject.org/pub/epel/epel{,-next}-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
-      when: ansible_distribution == 'CentOS'
-      failed_when: false
+    - name: Install EPEL Next release RPM on CentOS Stream 9 and older
+      command: dnf -y install https://dl.fedoraproject.org/pub/epel/epel-next-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
+      args:
+        creates: /etc/yum.repos.d/epel-next.repo
+      when:
+        - ansible_distribution == 'CentOS'
+        - ansible_distribution_major_version | int < 10
 
     # Automatic updates
     - name: Install dnf-automatic (dnf4)
