@@ -91,17 +91,19 @@
       register: ssh_verify
       changed_when: false
 
-    # Firewall
-    - name: Set default zone to drop
-      command: firewall-cmd --set-default-zone=drop
-      changed_when: true
-
-    - name: Allow SSH permanently
-      command: firewall-cmd --permanent --add-service=ssh
+    # Firewall: --set-default-zone is a runtime change, so SSH has to be
+    # allowed in the drop zone and reloaded first, otherwise new connections
+    # are refused between the zone switch and the reload
+    - name: Allow SSH in the drop zone
+      command: firewall-cmd --permanent --zone=drop --add-service=ssh
       changed_when: true
 
     - name: Reload firewall
       command: firewall-cmd --reload
+      changed_when: true
+
+    - name: Set default zone to drop
+      command: firewall-cmd --set-default-zone=drop
       changed_when: true
 
     # EPEL for RHEL/CentOS (needed for buildbot-worker and fail2ban)
