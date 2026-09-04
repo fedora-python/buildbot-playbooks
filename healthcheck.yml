@@ -93,9 +93,9 @@
 
         home_dev=$(df --output=source /home 2>/dev/null | tail -1)
         root_dev=$(df --output=source / | tail -1)
-        if [ "$home_dev" != "$root_dev" ]; then
+        if [ -n "$home_dev" ] && [ "$home_dev" != "$root_dev" ]; then
           home_usage=$(df /home --output=pcent | tail -1 | tr -d ' %')
-          if [ "$home_usage" -ge 90 ]; then
+          if [ "${home_usage:-0}" -ge 90 ]; then
             errors="${errors}FAIL: /home filesystem at ${home_usage}%\n"
           fi
         fi
