@@ -25,9 +25,9 @@
       shell: |
         running=$(uname -r)
         removed=0
-        for f in /boot/vmlinuz-*-kdump /boot/initramfs-*kdump.img; do
+        for f in /boot/initramfs-*kdump.img /boot/initramfs-*kdump; do
           [ -e "$f" ] || continue
-          kver=$(basename "$f" | sed -E 's/^(vmlinuz|initramfs)-//; s/(-kdump\.img|-kdump)$//')
+          kver=$(basename "$f" | sed -E 's/^initramfs-//; s/kdump(\.img)?$//')
           if [ "$kver" != "$running" ]; then
             echo "Removing: $f"
             rm -f "$f"
