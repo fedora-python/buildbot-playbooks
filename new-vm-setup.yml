@@ -94,17 +94,29 @@
     # Firewall: --set-default-zone is a runtime change, so SSH has to be
     # allowed in the drop zone and reloaded first, otherwise new connections
     # are refused between the zone switch and the reload
+    - name: Get services already allowed in the drop zone
+      command: firewall-cmd --permanent --zone=drop --list-services
+      register: drop_services
+      changed_when: false
+
     - name: Allow SSH in the drop zone
       command: firewall-cmd --permanent --zone=drop --add-service=ssh
-      changed_when: true
+      when: "'ssh' not in drop_services.stdout.split()"
 
+    # Unconditional: a previous run may have written the permanent rule and
+    # died before applying it, leaving the runtime config without SSH
     - name: Reload firewall
       command: firewall-cmd --reload
       changed_when: true
 
+    - name: Get default firewall zone
+      command: firewall-cmd --get-default-zone
+      register: default_zone
+      changed_when: false
+
     - name: Set default zone to drop
       command: firewall-cmd --set-default-zone=drop
-      changed_when: true
+      when: default_zone.stdout != 'drop'
 
     # EPEL for RHEL/CentOS (needed for buildbot-worker and fail2ban)
     - name: Enable CRB repo on CentOS Stream
@@ -386,9 +398,15 @@
         enabled: true
         state: started
 
+    - name: Get active tuned profile
+      command: tuned-adm active
+      register: tuned_active
+      changed_when: false
+      failed_when: false
+
     - name: Set throughput-performance tuned profile
       command: tuned-adm profile throughput-performance
-      changed_when: false
+      when: "'throughput-performance' not in tuned_active.stdout"
 
     # fstrim for qcow2 disk reclaim
     - name: Enable fstrim timer
