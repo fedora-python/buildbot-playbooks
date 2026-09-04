@@ -43,7 +43,7 @@
         echo '=== TUNED ==='
         tuned-adm active 2>/dev/null || echo 'tuned not available'
         echo '=== AUTOMATIC UPDATES ==='
-        systemctl is-active dnf-automatic-install.timer 2>/dev/null || echo 'dnf-automatic not active'
+        systemctl list-units --type=timer --all --plain --no-legend 2>/dev/null | grep -E '^dnf5?-automatic' || echo 'no dnf-automatic timer loaded'
         echo '=== FSTRIM ==='
         systemctl is-active fstrim.timer 2>/dev/null || echo 'fstrim timer not active'
         echo '=== JOURNALD ==='
