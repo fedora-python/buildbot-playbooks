@@ -451,7 +451,7 @@
     - name: Remove duplicate rescue kernels from /boot
       shell: |
         rescue_kernels=$(ls -t /boot/vmlinuz-0-rescue-* 2>/dev/null)
-        count=$(echo "$rescue_kernels" | grep -c . 2>/dev/null || echo 0)
+        count=$(echo "$rescue_kernels" | grep -c . 2>/dev/null || true)
         if [ "$count" -le 1 ]; then
           echo "No duplicate rescue kernels"
           exit 0
