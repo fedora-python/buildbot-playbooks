@@ -50,7 +50,7 @@
         state: latest
 
     - name: check if reboot is needed
-      command: "dnf needs-restarting -r -s"
+      command: "dnf needs-restarting -r"
       register: needs_restarting
       changed_when: needs_restarting.rc == 1
       failed_when: false
