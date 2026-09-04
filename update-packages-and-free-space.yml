@@ -128,10 +128,17 @@
 
     - name: Remove old build directories and rotated logs
       shell: |
-        cd "{{ worker_path.stdout }}" && \
-        rm -rf 3.* pull_request* custom* twistd.log.*
+        cd "{{ worker_path.stdout }}" || exit 1
+        removed=0
+        for d in 3.* pull_request* custom* twistd.log.*; do
+          [ -e "$d" ] || continue
+          echo "Removing: $d"
+          rm -rf "$d"
+          removed=$((removed + 1))
+        done
+        echo "Removed $removed item(s)"
       register: cleanup_result
-      changed_when: cleanup_result.rc == 0
+      changed_when: "'Removing:' in cleanup_result.stdout"
       when: worker_path.stdout is defined and worker_path.stdout | length > 0
 
     - name: Start again the buildbot worker service
