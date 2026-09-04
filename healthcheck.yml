@@ -198,9 +198,14 @@
             warnings="${warnings}WARN: twistd.log is ${log_size}MB\n"
           fi
 
-          last_log=$(tail -5 "$log_dir/twistd.log" 2>/dev/null)
-          echo "$last_log" | grep -q "Scheduling retry\|connection already shut down" && \
-            errors="${errors}FAIL: worker disconnected from master\n"
+          worker_port=$(awk -F'= *' '/^port = [0-9]+$/ {print $2}' "$tac_file")
+          if [ -z "$worker_port" ]; then
+            warnings="${warnings}WARN: could not determine master port from buildbot.tac\n"
+          elif ! command -v ss >/dev/null 2>&1; then
+            warnings="${warnings}WARN: ss not available, master connection not checked\n"
+          elif ! ss -tn state established "dport = :${worker_port}" 2>/dev/null | tail -n +2 | grep -q .; then
+            errors="${errors}FAIL: worker not connected to master on port ${worker_port}\n"
+          fi
         else
           errors="${errors}FAIL: no buildbot.tac found\n"
         fi
