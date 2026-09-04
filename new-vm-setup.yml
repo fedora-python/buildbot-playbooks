@@ -8,6 +8,7 @@
       user:
         name: "{{ admin_user }}"
         groups: wheel
+        append: true
         password: ''
 
     - name: Deploy admin user SSH key
