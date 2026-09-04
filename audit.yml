@@ -74,7 +74,7 @@
         fail2ban-client status sshd 2>/dev/null || echo 'fail2ban sshd jail not available'
         echo '=== BOOT ORPHANS ==='
         rescue_count=$(ls /boot/vmlinuz-0-rescue-* 2>/dev/null | wc -l)
-        kdump_count=$(ls /boot/vmlinuz-*-kdump /boot/initramfs-*-kdump* 2>/dev/null | wc -l)
+        kdump_count=$(ls /boot/initramfs-*kdump* 2>/dev/null | wc -l)
         echo "${rescue_count} rescue image(s), ${kdump_count} kdump image(s)"
       register: audit
       changed_when: false
