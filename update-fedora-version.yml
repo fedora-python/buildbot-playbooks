@@ -12,8 +12,11 @@
       poll: 0
       ignore_unreachable: true
 
+    # The whole offline upgrade transaction runs before sshd is back, so this
+    # has to cover it, not just the reboot. The check polls every second and
+    # returns as soon as the host answers, so a generous bound costs nothing.
     - name: Wait for machine to come back
       wait_for_connection:
         delay: 60
-        timeout: 600
+        timeout: 3600
 
