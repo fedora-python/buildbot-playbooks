@@ -41,11 +41,11 @@
         regexp: '^#?KbdInteractiveAuthentication'
         line: 'KbdInteractiveAuthentication no'
 
-    - name: Set MaxAuthTries 3
+    - name: Set MaxAuthTries 5
       lineinfile:
         path: /etc/ssh/sshd_config
         regexp: '^#?MaxAuthTries'
-        line: 'MaxAuthTries 3'
+        line: 'MaxAuthTries 5'
 
     - name: Set LogLevel VERBOSE
       lineinfile:

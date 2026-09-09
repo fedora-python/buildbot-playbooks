@@ -37,8 +37,8 @@
             errors="${errors}FAIL: PermitRootLogin is not set to no\n"
           echo "$sshd_effective" | grep -q '^kbdinteractiveauthentication no' || \
             warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
-          echo "$sshd_effective" | grep -q '^maxauthtries 3' || \
-            warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
+          echo "$sshd_effective" | grep -q '^maxauthtries 5' || \
+            warnings="${warnings}WARN: MaxAuthTries not set to 5\n"
           echo "$sshd_effective" | grep -q '^loglevel VERBOSE' || \
             warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
           echo "$sshd_effective" | grep -q '^logingracetime 30' || \
@@ -54,8 +54,8 @@
             errors="${errors}FAIL: PermitRootLogin is not set to no\n"
           grep -q '^KbdInteractiveAuthentication no' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
             warnings="${warnings}WARN: KbdInteractiveAuthentication not set to no\n"
-          grep -q '^MaxAuthTries 3' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
-            warnings="${warnings}WARN: MaxAuthTries not set to 3\n"
+          grep -q '^MaxAuthTries 5' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
+            warnings="${warnings}WARN: MaxAuthTries not set to 5\n"
           grep -q '^LogLevel VERBOSE' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
             warnings="${warnings}WARN: LogLevel not set to VERBOSE\n"
           grep -q '^LoginGraceTime 30' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null || \
